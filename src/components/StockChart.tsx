@@ -102,7 +102,7 @@ const StockChart = ({ company }: Props) => {
   return (
     <ResponsiveContainer width="100%" height={450}>
       <LineChart
-        data={data}
+        data={data} syncId="stockSync"
         onMouseDown={(e) => { if (e?.activeLabel) setRefStartTime(Number(e.activeLabel)); }}
         onMouseMove={(e) => { if (refStartTime !== null && e?.activeLabel) setRefEndTime(Number(e.activeLabel)); }}
         onMouseUp={handleZoom}
@@ -130,7 +130,7 @@ const StockChart = ({ company }: Props) => {
 
         <YAxis
           label={{
-            value: "Price",
+            value: "Price (USD)",
             angle: -90,
             position: "insideLeft",
             style: { fontWeight: "bold", fontSize: 14, fill: "#555" }

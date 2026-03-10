@@ -115,7 +115,7 @@ const FinbertSentimentChart = ({ company }: Props) => {
     <div onDoubleClick={resetZoom}>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart
-          data={data}
+          data={data} syncId="stockSync"
           onMouseDown={(e) =>
             e?.activeLabel && setRefStart(Number(e.activeLabel))
           }

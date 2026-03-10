@@ -137,7 +137,7 @@ const GainLossChart = ({ company }: Props) => {
           <YAxis
             tickFormatter={(value) => `${value}`}
             label={{
-              value: "Gain / Loss",
+              value: "Gain / Loss (USD)",
               angle: -90,
               position: "insideLeft",
               style: { fontWeight: "bold", fontSize: 14, fill: "#555" }
