@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Papa from "papaparse";
 import {
   LineChart,
   Line,
@@ -24,6 +23,12 @@ interface Props {
   company: string;
 }
 
+interface StockApiResponse {
+  "Date Time": string;
+  Close: number;
+  Predicted: number;
+}
+
 const StockChart = ({ company }: Props) => {
   const [data, setData] = useState<StockData[]>([]);
   const [startIndex, setStartIndex] = useState(0);
@@ -32,29 +37,49 @@ const StockChart = ({ company }: Props) => {
   const [refStartTime, setRefStartTime] = useState<number | null>(null);
   const [refEndTime, setRefEndTime] = useState<number | null>(null);
 
+  // ✅ FETCH DATA FROM API
   useEffect(() => {
-    fetch(`/data/${company}.csv`)
-      .then((res) => res.text())
-      .then((csvText) => {
-        const result = Papa.parse(csvText, {
-          header: true,
-          dynamicTyping: true,
-          skipEmptyLines: true
-        });
-
-        const filtered = (result.data as StockData[])
-          .filter((r) => r["Date Time"] && r.Close != null)
+    fetch(`http://localhost:5000/api/stocks/${company}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("API error");
+        return res.json();
+      })
+      .then((result: StockApiResponse[]) => {
+        // ✅ CLEAN + VALIDATE DATA
+        const formatted: StockData[] = result
+          .filter(
+            (r) =>
+              r["Date Time"] &&
+              r.Close != null &&
+              r.Predicted != null &&
+              !isNaN(new Date(r["Date Time"]).getTime())
+          )
           .map((r) => ({
             ...r,
+            Close: Number(r.Close),
+            Predicted: Number(r.Predicted),
             timestamp: new Date(r["Date Time"]).getTime()
           }));
 
-        setData(filtered);
+        // ✅ REMOVE DUPLICATE TIMESTAMPS
+        const uniqueData = Array.from(
+          new Map(formatted.map((item) => [item.timestamp, item])).values()
+        );
+
+        setData(uniqueData);
         setStartIndex(0);
-        setEndIndex(filtered.length - 1);
+        setEndIndex(uniqueData.length - 1);
+
+        // reset zoom
+        setRefStartTime(null);
+        setRefEndTime(null);
+      })
+      .catch((err) => {
+        console.error("Error fetching data:", err);
       });
   }, [company]);
 
+  // ✅ ZOOM HANDLER
   const handleZoom = () => {
     if (refStartTime === null || refEndTime === null) return;
 
@@ -71,46 +96,56 @@ const StockChart = ({ company }: Props) => {
     setRefEndTime(null);
   };
 
+  // ✅ RESET ZOOM
   const resetZoom = () => {
     setStartIndex(0);
     setEndIndex(data.length - 1);
   };
 
+  // ✅ SAFE TICKS (NO DUPLICATES)
   const generateXTicks = (data: StockData[], start: number, end: number) => {
     if (!data.length) return [];
+
     const visible = data.slice(start, end + 1);
-    const totalPoints = visible.length;
+    if (!visible.length) return [];
 
-    const maxTicks = 12;
-    const step = Math.ceil(totalPoints / maxTicks);
-
-    const middleTicks = visible
-      .filter((_, i) => i % step === 0)
-      .map(d => d.timestamp);
+    const step = Math.ceil(visible.length / 12);
 
     const ticks = [
       visible[0].timestamp,
-      ...middleTicks.filter(
-        t => t !== visible[0].timestamp && t !== visible[visible.length - 1].timestamp
-      ),
+      ...visible
+        .filter((_, i) => i % step === 0)
+        .map((d) => d.timestamp),
       visible[visible.length - 1].timestamp
     ];
 
-    return ticks;
+    return [...new Set(ticks)];
   };
+
+  // ✅ PREVENT EMPTY RENDER
+  if (!data.length) {
+    return <div>No valid data</div>;
+  }
 
   return (
     <ResponsiveContainer width="100%" height={450}>
       <LineChart
-        data={data} syncId="stockSync"
-        onMouseDown={(e) => { if (e?.activeLabel) setRefStartTime(Number(e.activeLabel)); }}
-        onMouseMove={(e) => { if (refStartTime !== null && e?.activeLabel) setRefEndTime(Number(e.activeLabel)); }}
+        data={data}
+        syncId="stockSync"
+        onMouseDown={(e) => {
+          if (e?.activeLabel) setRefStartTime(Number(e.activeLabel));
+        }}
+        onMouseMove={(e) => {
+          if (refStartTime !== null && e?.activeLabel) {
+            setRefEndTime(Number(e.activeLabel));
+          }
+        }}
         onMouseUp={handleZoom}
         onDoubleClick={resetZoom}
       >
         <CartesianGrid stroke="#ccc" />
 
-        {/* X-axis with label */}
+        {/* ✅ X AXIS */}
         <XAxis
           dataKey="timestamp"
           type="number"
@@ -118,40 +153,34 @@ const StockChart = ({ company }: Props) => {
           domain={["dataMin", "dataMax"]}
           ticks={generateXTicks(data, startIndex, endIndex)}
           tickFormatter={(time) =>
-            new Date(time).toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+            new Date(time).toLocaleDateString("en-US", {
+              month: "short",
+              year: "2-digit"
+            })
           }
-          label={{
-            value: "Date (Month / Year)",
-            position: "insideBottom",
-            offset: -10,
-            style: { fontWeight: "bold", fontSize: 14, fill: "#555" }
-          }}
         />
 
+        {/* ✅ Y AXIS */}
         <YAxis
-          label={{
-            value: "Price (USD)",
-            angle: -90,
-            position: "insideLeft",
-            style: { fontWeight: "bold", fontSize: 14, fill: "#555" }
-          }}
-        />
+            tickFormatter={(value) => `${value}`}
+            label={{
+              value: "Price (USD)",
+              angle: -90,
+              position: "insideLeft",
+              style: { fontWeight: "bold", fontSize: 14, fill: "#555" }
+            }}
+          />
 
+        {/* ✅ TOOLTIP */}
         <Tooltip
-          labelFormatter={(label) => {
-            if (typeof label === "number") {
-              return new Date(label).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "2-digit"
-              });
-            }
-            return label;
-          }}
+          labelFormatter={(label) =>
+            new Date(Number(label)).toLocaleDateString()
+          }
         />
 
-        <Legend verticalAlign="top" align="center" />
+        <Legend />
 
+        {/* ✅ LINES */}
         <Line
           type="monotone"
           dataKey="Close"
@@ -169,28 +198,33 @@ const StockChart = ({ company }: Props) => {
           dot={false}
         />
 
-        {/* Drag selection */}
-        {refStartTime !== null && refEndTime !== null && (
-          <ReferenceArea
-            x1={refStartTime}
-            x2={refEndTime}
-            strokeOpacity={0.3}
-          />
-        )}
+        {/* ✅ SAFE REFERENCE AREA */}
+        {refStartTime !== null &&
+          refEndTime !== null &&
+          !isNaN(refStartTime) &&
+          !isNaN(refEndTime) && (
+            <ReferenceArea
+              x1={refStartTime}
+              x2={refEndTime}
+              strokeOpacity={0.3}
+            />
+          )}
 
-        {/* Brush slider with styling */}
+        {/* ✅ BRUSH */}
         <Brush
           dataKey="timestamp"
           height={35}
           startIndex={startIndex}
           endIndex={endIndex}
-          stroke="#8884d8"
           travellerWidth={10}
-          tickFormatter={(time) =>
-            new Date(time).toLocaleDateString("en-US", { month: "short", year: "2-digit" })
-          }
           onChange={(e) => {
-            if (e?.startIndex !== undefined && e?.endIndex !== undefined) {
+            if (
+              e &&
+              typeof e.startIndex === "number" &&
+              typeof e.endIndex === "number" &&
+              e.startIndex >= 0 &&
+              e.endIndex < data.length
+            ) {
               setStartIndex(e.startIndex);
               setEndIndex(e.endIndex);
             }
