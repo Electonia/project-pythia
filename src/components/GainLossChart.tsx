@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Papa from "papaparse";
 import {
   BarChart,
   Bar,
@@ -37,34 +36,33 @@ const GainLossChart = ({ company }: Props) => {
   const [refEndTime, setRefEndTime] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`/data/${company}.csv`)
-      .then((response) => response.text())
-      .then((csvText) => {
-        const result = Papa.parse<StockData>(csvText, {
-          header: true,
-          dynamicTyping: true,
-          skipEmptyLines: true,
-        });
+   fetch(`http://46.101.3.179:5000/api/GainLoss/${company}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("API error");
+        return res.json();
+      })
+    .then((response) => response.json()) // Change .text() to .json()
+    .then((jsonData: StockData[]) => { // jsonData is now the array from your SQL recordset
+      const parsedData = jsonData
+        .filter((row) => row["Date Time"] && row.GainLoss != null)
+        .sort(
+          (a, b) =>
+            new Date(a["Date Time"]).getTime() -
+            new Date(b["Date Time"]).getTime()
+        )
+        .map((row) => ({
+          ...row,
+          Gain: row.GainLoss >= 0 ? row.GainLoss : 0,
+          Loss: row.GainLoss < 0 ? row.GainLoss : 0,
+          timestamp: new Date(row["Date Time"]).getTime(),
+        }));
 
-        const parsedData = result.data
-          .filter((row) => row["Date Time"] && row.GainLoss != null)
-          .sort(
-            (a, b) =>
-              new Date(a["Date Time"]).getTime() -
-              new Date(b["Date Time"]).getTime()
-          )
-          .map((row) => ({
-            ...row,
-            Gain: row.GainLoss >= 0 ? row.GainLoss : 0,
-            Loss: row.GainLoss < 0 ? row.GainLoss : 0,
-            timestamp: new Date(row["Date Time"]).getTime(),
-          }));
-
-        setData(parsedData);
-        setStartIndex(0);
-        setEndIndex(parsedData.length - 1);
-      });
-  }, [company]);
+      setData(parsedData);
+      setStartIndex(0);
+      setEndIndex(parsedData.length - 1);
+    })
+    .catch(err => console.error("Fetch error:", err));
+}, [company]);
 
   const handleZoom = () => {
     if (refStartTime === null || refEndTime === null) return;

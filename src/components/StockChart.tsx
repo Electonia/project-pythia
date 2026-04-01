@@ -37,15 +37,15 @@ const StockChart = ({ company }: Props) => {
   const [refStartTime, setRefStartTime] = useState<number | null>(null);
   const [refEndTime, setRefEndTime] = useState<number | null>(null);
 
-  // ✅ FETCH DATA FROM API
+  // FETCH DATA FROM API
   useEffect(() => {
-    fetch(`http://localhost:5000/api/stocks/${company}`)
+    fetch(`http://46.101.3.179:5000/api/stocks/${company}`)
       .then((res) => {
         if (!res.ok) throw new Error("API error");
         return res.json();
       })
       .then((result: StockApiResponse[]) => {
-        // ✅ CLEAN + VALIDATE DATA
+        //  CLEAN + VALIDATE DATA
         const formatted: StockData[] = result
           .filter(
             (r) =>
@@ -61,7 +61,7 @@ const StockChart = ({ company }: Props) => {
             timestamp: new Date(r["Date Time"]).getTime()
           }));
 
-        // ✅ REMOVE DUPLICATE TIMESTAMPS
+        //  REMOVE DUPLICATE TIMESTAMPS
         const uniqueData = Array.from(
           new Map(formatted.map((item) => [item.timestamp, item])).values()
         );
@@ -79,7 +79,7 @@ const StockChart = ({ company }: Props) => {
       });
   }, [company]);
 
-  // ✅ ZOOM HANDLER
+  //  ZOOM HANDLER
   const handleZoom = () => {
     if (refStartTime === null || refEndTime === null) return;
 
@@ -96,13 +96,13 @@ const StockChart = ({ company }: Props) => {
     setRefEndTime(null);
   };
 
-  // ✅ RESET ZOOM
+  //  RESET ZOOM
   const resetZoom = () => {
     setStartIndex(0);
     setEndIndex(data.length - 1);
   };
 
-  // ✅ SAFE TICKS (NO DUPLICATES)
+  //  SAFE TICKS (NO DUPLICATES)
   const generateXTicks = (data: StockData[], start: number, end: number) => {
     if (!data.length) return [];
 
@@ -122,8 +122,8 @@ const StockChart = ({ company }: Props) => {
     return [...new Set(ticks)];
   };
 
-  // ✅ PREVENT EMPTY RENDER
-  if (!data.length) {
+  //  PREVENT EMPTY RENDER
+  if ( ! data || data.length === 0) {
     return <div>No valid data</div>;
   }
 
@@ -145,7 +145,7 @@ const StockChart = ({ company }: Props) => {
       >
         <CartesianGrid stroke="#ccc" />
 
-        {/* ✅ X AXIS */}
+        {/*  X AXIS */}
         <XAxis
           dataKey="timestamp"
           type="number"
@@ -160,7 +160,7 @@ const StockChart = ({ company }: Props) => {
           }
         />
 
-        {/* ✅ Y AXIS */}
+        {/*  Y AXIS */}
         <YAxis
             tickFormatter={(value) => `${value}`}
             label={{
@@ -171,16 +171,16 @@ const StockChart = ({ company }: Props) => {
             }}
           />
 
-        {/* ✅ TOOLTIP */}
+        {/*  TOOLTIP */}
         <Tooltip
           labelFormatter={(label) =>
             new Date(Number(label)).toLocaleDateString()
           }
         />
 
-        <Legend />
+        <Legend verticalAlign="top" align="center" />
 
-        {/* ✅ LINES */}
+        {/*  LINES */}
         <Line
           type="monotone"
           dataKey="Close"
@@ -198,19 +198,18 @@ const StockChart = ({ company }: Props) => {
           dot={false}
         />
 
-        {/* ✅ SAFE REFERENCE AREA */}
+        {/*  SAFE REFERENCE AREA */}
         {refStartTime !== null &&
-          refEndTime !== null &&
-          !isNaN(refStartTime) &&
-          !isNaN(refEndTime) && (
+          refEndTime !== null && (
             <ReferenceArea
               x1={refStartTime}
               x2={refEndTime}
               strokeOpacity={0.3}
+              fill = "#8884D8"
             />
           )}
 
-        {/* ✅ BRUSH */}
+        {/*  BRUSH */}
         <Brush
           dataKey="timestamp"
           height={35}

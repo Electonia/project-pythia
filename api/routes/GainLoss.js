@@ -3,20 +3,18 @@ import { sql, pool } from "../db.js";
 
 const router = express.Router();
 
-router.get("/api/stocks/:company", async (req, res) => {
+router.get("/api/GainLoss/:company", async (req, res) => {
   try {
     const { company } = req.params;
     const db = await pool;
 
-    // stocks.js
+    // GainLoss.js
 const result = await db.request()
   .input("company", sql.VarChar, company)
   .query(`
     SELECT 
       [date_time] AS [Date Time],
-      Closing AS [Close],          
-      predicted AS [Predicted],
-      gain_loss AS [GainLoss]     
+      gain_loss AS [GainLoss]    
     FROM stock_values
     WHERE stock = @company
     ORDER BY [date_time]
