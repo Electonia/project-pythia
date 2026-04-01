@@ -36,13 +36,15 @@ const GainLossChart = ({ company }: Props) => {
   const [refEndTime, setRefEndTime] = useState<number | null>(null);
 
   useEffect(() => {
-   fetch(`http://46.101.3.179:5000/api/GainLoss/${company}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("API error");
-        return res.json();
-      })
-    .then((response) => response.json()) // Change .text() to .json()
-    .then((jsonData: StockData[]) => { // jsonData is now the array from your SQL recordset
+  fetch(`http://46.101.3.179:5000/api/GainLoss/${company}`)
+    .then((response) => {
+      // Check if the response is actually okay (not a 404 or 500)
+      if (!response.ok) {
+        throw new Error(`Network response was not ok: ${response.status}`);
+      }
+      return response.json(); // This parses the body as JSON and passes it to the next .then()
+    })
+    .then((jsonData: StockData[]) => {
       const parsedData = jsonData
         .filter((row) => row["Date Time"] && row.GainLoss != null)
         .sort(
@@ -61,7 +63,9 @@ const GainLossChart = ({ company }: Props) => {
       setStartIndex(0);
       setEndIndex(parsedData.length - 1);
     })
-    .catch(err => console.error("Fetch error:", err));
+    .catch((err) => {
+      console.error("Fetch error:", err);
+    });
 }, [company]);
 
   const handleZoom = () => {

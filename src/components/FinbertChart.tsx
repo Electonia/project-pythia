@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Papa from "papaparse";
 import {
   LineChart,
   Line,
@@ -13,15 +12,17 @@ import {
   ReferenceArea,
 } from "recharts";
 
+// 1. Define the shape of the data used by the Chart
 interface StockData {
   "Date Time": string;
   finbert_sentiment_score: number;
   timestamp: number;
 }
 
-interface CSVRow {
+// 2. Define the shape of the data coming from your SQL API
+interface DBFinbertRow {
   "Date Time": string;
-  finbert_sentiment_score: string | number;
+  finbert_sentiment_score: number | string | null;
 }
 
 interface Props {
@@ -37,30 +38,36 @@ const FinbertSentimentChart = ({ company }: Props) => {
   const [refEnd, setRefEnd] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`/data/${company}.csv`)
-      .then((res) => res.text())
-      .then((csvText) => {
-        const result = Papa.parse<CSVRow>(csvText, {
-          header: true,
-          skipEmptyLines: true,
-        });
-
-        const filtered: StockData[] = result.data
-          .filter((row) => row["Date Time"])
+    // Fetch from your Node.js API
+    fetch(`http://46.101.3.179:5000/api/Finbert/${company}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Server error: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((jsonData: DBFinbertRow[]) => {
+        // Map Database rows to Chart format
+        const parsedData: StockData[] = jsonData
+          .filter((row) => row["Date Time"]) 
           .map((row) => ({
             "Date Time": row["Date Time"],
             timestamp: new Date(row["Date Time"]).getTime(),
-            finbert_sentiment_score:
-              row.finbert_sentiment_score !== "" &&
-              row.finbert_sentiment_score != null
-                ? Number(row.finbert_sentiment_score)
+            finbert_sentiment_score: 
+              row.finbert_sentiment_score != null 
+                ? Number(row.finbert_sentiment_score) 
                 : 0,
           }))
           .sort((a, b) => a.timestamp - b.timestamp);
 
-        setData(filtered);
-        setStartIndex(0);
-        setEndIndex(filtered.length - 1);
+        if (parsedData.length > 0) {
+          setData(parsedData);
+          setStartIndex(0);
+          setEndIndex(parsedData.length - 1);
+        }
+      })
+      .catch((err) => {
+        console.error("Finbert Fetch Error:", err);
       });
   }, [company]);
 
@@ -87,13 +94,8 @@ const FinbertSentimentChart = ({ company }: Props) => {
 
   const generateXTicks = (data: StockData[], start: number, end: number) => {
     if (!data.length) return [];
-
     const visible = data.slice(start, end + 1);
-    const totalPoints = visible.length;
-    const maxTicks = 12;
-
-    const step = Math.ceil(totalPoints / maxTicks);
-
+    const step = Math.ceil(visible.length / 12);
     const middleTicks = visible
       .filter((_, i) => i % step === 0)
       .map((d) => d.timestamp);
@@ -101,24 +103,21 @@ const FinbertSentimentChart = ({ company }: Props) => {
     return [
       visible[0].timestamp,
       ...middleTicks.filter(
-        (t) =>
-          t !== visible[0].timestamp &&
-          t !== visible[visible.length - 1].timestamp
+        (t) => t !== visible[0].timestamp && t !== visible[visible.length - 1].timestamp
       ),
       visible[visible.length - 1].timestamp,
     ];
   };
 
-  if (!data.length) return <div>Loading chart...</div>;
+  if (!data.length) return <div style={{ padding: "20px", color: "#666" }}>Loading FinBERT Sentiment Data...</div>;
 
   return (
-    <div onDoubleClick={resetZoom}>
+    <div onDoubleClick={resetZoom} style={{ userSelect: "none" }}>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart
-          data={data} syncId="stockSync"
-          onMouseDown={(e) =>
-            e?.activeLabel && setRefStart(Number(e.activeLabel))
-          }
+          data={data} 
+          syncId="stockSync" // Allows syncing with GainLoss chart
+          onMouseDown={(e) => e?.activeLabel && setRefStart(Number(e.activeLabel))}
           onMouseMove={(e) => {
             if (refStart !== null && e?.activeLabel) {
               setRefEnd(Number(e.activeLabel));
@@ -150,7 +149,7 @@ const FinbertSentimentChart = ({ company }: Props) => {
 
           <YAxis
             type="number"
-            domain={[-1, 1]}
+            domain={[-1, 1]} // Sentiment range is usually -1 to 1
             label={{
               value: "FinBERT Score",
               angle: -90,
@@ -171,15 +170,16 @@ const FinbertSentimentChart = ({ company }: Props) => {
             }
           />
 
-          <Legend verticalAlign="top" align="center" />
+          <Legend verticalAlign="top" align="center" height={36}/>
 
           <Line
             type="monotone"
             dataKey="finbert_sentiment_score"
-            name="FinBERT Sentiment Score"
+            name="FinBERT Sentiment"
             stroke="#ff9800"
             strokeWidth={3}
             dot={false}
+            isAnimationActive={false} // Improves performance during zoom/sync
           />
 
           {refStart !== null && refEnd !== null && (
