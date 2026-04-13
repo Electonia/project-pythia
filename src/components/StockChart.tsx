@@ -158,6 +158,12 @@ const StockChart = ({ company }: Props) => {
               year: "2-digit"
             })
           }
+          label={{
+              value: "Date (Month / Year)",
+              position: "insideBottom",
+              offset: -20,
+              style: { fontWeight: "bold", fontSize: 14, fill: "#555" },
+            }}
         />
 
         {/*  Y AXIS */}
@@ -188,6 +194,7 @@ const StockChart = ({ company }: Props) => {
           stroke="#1976d2"
           strokeWidth={3}
           dot={false}
+          
         />
         <Line
           type="monotone"

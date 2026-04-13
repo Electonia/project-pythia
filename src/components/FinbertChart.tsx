@@ -125,7 +125,7 @@ const FinbertSentimentChart = ({ company }: Props) => {
           }}
           onMouseUp={handleZoom}
         >
-          <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+          <CartesianGrid stroke="#ccc" />
 
           <XAxis
             dataKey="timestamp"
@@ -142,7 +142,7 @@ const FinbertSentimentChart = ({ company }: Props) => {
             label={{
               value: "Date (Month / Year)",
               position: "insideBottom",
-              offset: -10,
+              offset: -20,
               style: { fontWeight: "bold", fontSize: 14, fill: "#555" },
             }}
           />

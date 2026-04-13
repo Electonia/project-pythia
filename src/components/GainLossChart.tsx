@@ -130,7 +130,7 @@ const GainLossChart = ({ company }: Props) => {
             label={{
               value: "Date (Day / Month)",
               position: "insideBottom",
-              offset: -10,
+              offset: -20,
               style: { fontWeight: "bold", fontSize: 14, fill: "#555" }
             }}
           />

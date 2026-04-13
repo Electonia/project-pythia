@@ -115,7 +115,7 @@ const CommulativeChart = ({ company }: Props) => {
             domain={["dataMin", "dataMax"]}
             ticks={generateXTicks(data, startIndex, endIndex)}
             tickFormatter={(time) => new Date(time).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
-            label={{ value: "Date (Month / Year)", position: "insideBottom", offset: -10, style: { fontWeight: "bold", fontSize: 14, fill: "#555" } }}
+            label={{ value: "Date (Month / Year)", position: "insideBottom", offset: -20, style: { fontWeight: "bold", fontSize: 14, fill: "#555" } }}
           />
           <YAxis
             label={{ value: "Cumulative Performance", angle: -90, position: "insideLeft", style: { fontWeight: "bold", fontSize: 14, fill: "#555" } }}
@@ -155,11 +155,20 @@ const CommulativeChart = ({ company }: Props) => {
             }}
           />
           <defs>
-            <linearGradient id="colorGainLoss" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1976d2" stopOpacity={0.4} />
-              <stop offset="75%" stopColor="#1976d2" stopOpacity={0.05} />
-            </linearGradient>
-          </defs>
+  <linearGradient id="colorGainLoss" x1="0" y1="0" x2="0" y2="1">
+    {/* Strong top color */}
+    <stop offset="0%" stopColor="#1976d2" stopOpacity={0.7} />
+
+    {/* Mid smooth fade */}
+    <stop offset="40%" stopColor="#1976d2" stopOpacity={0.35} />
+
+    {/* Lower fade */}
+    <stop offset="75%" stopColor="#1976d2" stopOpacity={0.15} />
+
+    {/* Bottom very soft */}
+    <stop offset="100%" stopColor="#1976d2" stopOpacity={0.03} />
+  </linearGradient>
+</defs>
         </AreaChart>
       </ResponsiveContainer>
     </div>
