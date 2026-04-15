@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import sql from "mssql"; // Ensure sql is imported for type definitions
-import { poolPromise } from "../db.js";
+import { pool } from "../db.js";
 
 const router = express.Router();
 
@@ -9,8 +9,8 @@ const router = express.Router();
 router.post('/api/register', async (req, res) => {
     const { name, username, email, password } = req.body;
     try {
-        const pool = await poolPromise;
-        const checkUser = await pool.request()
+        const db = await pool;
+        const checkUser = await db.request()
             .input('username', sql.NVarChar, username)
             .input('email', sql.NVarChar, email)
             .query('SELECT * FROM Users WHERE Username = @username OR Email = @email');
