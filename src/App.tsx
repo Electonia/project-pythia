@@ -1,11 +1,17 @@
-import { Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard.tsx";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Registration from "./pages/Registration";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
-    </Routes>
+        {/* Set Login as the default starting page */}
+        <Route path="/" element={<Navigate to="/Login" />} />
+        <Route path="/Login" element={<Login />} />
+        <Route path="/Registration" element={<Registration />} />
+        <Route path="/Dashboard" element={<Dashboard />} />
+      </Routes>
   );
 }
 
