@@ -1,7 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import sql from "mssql"; // Ensure sql is imported for type definitions
-import { pool } from "../db.js";
+import { sql, pool } from "../db.js";
 
 const router = express.Router();
 
