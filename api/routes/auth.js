@@ -21,7 +21,7 @@ router.post('/api/register', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        await pool.request()
+        await db.request()
             .input('name', sql.NVarChar, name)
             .input('username', sql.NVarChar, username)
             .input('email', sql.NVarChar, email)
@@ -40,10 +40,10 @@ router.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const pool = await poolPromise;
+        const db = await pool;
         
         // 1. Find user by email
-        const result = await pool.request()
+        const result = await db.request()
             .input('email', sql.NVarChar, email)
             .query('SELECT * FROM Users WHERE Email = @email');
 
