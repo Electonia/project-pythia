@@ -23,16 +23,19 @@ router.get("/api/search-stocks", async (req, res) => {
     try {
         const db = await pool;
         const result = await db.request()
-            .input('search', sql.NVarChar, `${query}%`) // Matches from the first letter
+            // Ensure this is exactly like this:
+            .input('search', sql.NVarChar, query + '%') 
             .query(`
                 SELECT TOP 10 name, ticker 
                 FROM stocks 
-                WHERE name LIKE @search
+                WHERE name LIKE @search OR ticker LIKE @search
             `);
+            
         res.json(result.recordset);
     } catch (err) {
-        console.error("Search error:", err);
-        res.status(500).json({ error: "Search failed" });
+        // This will print the EXACT error to your server terminal/logs
+        console.error("DETAILED SEARCH ERROR:", err.message);
+        res.status(500).json({ error: "Search failed", details: err.message });
     }
 });
 
