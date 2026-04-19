@@ -1,18 +1,23 @@
 import express from "express";
-// Ensure you use the correct exported variable from your db.js
-import { pool } from "../db.js"; 
+import { pool } from "../db.js"; // This is the Promise from your db.js
 
 const router = express.Router();
 
-// GET: /api/stock-list
 router.get("/api/stock-list", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT stock_name, stock_ticker FROM stock_id");
+    // 1. You MUST await the pool because it is a Promise in your db.js
+    const connectedPool = await pool; 
     
-    res.status(200).json(rows);
+    // 2. MSSQL uses .request().query() syntax
+    const result = await connectedPool.request().query("SELECT stock_name, stock_ticker FROM stock_id");
+    
+    // 3. MSSQL returns data in result.recordset
+    // We send result.recordset so the frontend gets the array of stocks
+    res.status(200).json(result.recordset);
   } catch (error) {
     console.error("Error fetching stock list:", error);
-    res.status(500).json({ error: "Failed to fetch stock list" });
+    // Send an empty array on error to prevent frontend crash
+    res.status(500).json([]); 
   }
 });
 
