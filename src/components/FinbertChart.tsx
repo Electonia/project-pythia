@@ -31,6 +31,7 @@ interface Props {
 
 const FinbertSentimentChart = ({ company }: Props) => {
   const [data, setData] = useState<StockData[]>([]);
+  const [loading, setLoading] = useState(true); // Start as loading
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(0);
 
@@ -38,37 +39,46 @@ const FinbertSentimentChart = ({ company }: Props) => {
   const [refEnd, setRefEnd] = useState<number | null>(null);
 
   useEffect(() => {
-    // Fetch from your Node.js API
-    fetch(`http://46.101.3.179:5000/api/Finbert/${company}`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Server error: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((jsonData: DBFinbertRow[]) => {
-        // Map Database rows to Chart format
-        const parsedData: StockData[] = jsonData
-          .filter((row) => row["Date Time"]) 
-          .map((row) => ({
-            "Date Time": row["Date Time"],
-            timestamp: new Date(row["Date Time"]).getTime(),
-            finbert_sentiment_score: 
-              row.finbert_sentiment_score != null 
-                ? Number(row.finbert_sentiment_score) 
-                : 0,
-          }))
-          .sort((a, b) => a.timestamp - b.timestamp);
+    let isMounted = true;
+    setLoading(true);
 
-        if (parsedData.length > 0) {
+    const fetchSentimentData = async () => {
+      try {
+        const res = await fetch(`http://46.101.3.179:5000/api/Finbert/${company}`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        
+        const jsonData: DBFinbertRow[] = await res.json();
+
+        if (isMounted) {
+          const parsedData: StockData[] = jsonData
+            .filter((row) => row["Date Time"])
+            .map((row) => ({
+              "Date Time": row["Date Time"],
+              timestamp: new Date(row["Date Time"]).getTime(),
+              finbert_sentiment_score:
+                row.finbert_sentiment_score != null
+                  ? Number(row.finbert_sentiment_score)
+                  : 0,
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
           setData(parsedData);
           setStartIndex(0);
-          setEndIndex(parsedData.length - 1);
+          setEndIndex(parsedData.length > 0 ? parsedData.length - 1 : 0);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Finbert Fetch Error:", err);
-      });
+        if (isMounted) setData([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchSentimentData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [company]);
 
   const handleZoom = () => {
@@ -95,6 +105,8 @@ const FinbertSentimentChart = ({ company }: Props) => {
   const generateXTicks = (data: StockData[], start: number, end: number) => {
     if (!data.length) return [];
     const visible = data.slice(start, end + 1);
+    if (visible.length === 0) return [];
+
     const step = Math.ceil(visible.length / 12);
     const middleTicks = visible
       .filter((_, i) => i % step === 0)
@@ -109,14 +121,48 @@ const FinbertSentimentChart = ({ company }: Props) => {
     ];
   };
 
-  if (!data.length) return <div style={{ padding: "20px", color: "#666" }}>Loading FinBERT Sentiment Data...</div>;
+  // --- STYLED PLACEHOLDER FOR NO DATA ---
+  if (!loading && data.length === 0) {
+    return (
+      <div style={{ 
+        height: 400, 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderRadius: '16px',
+        border: '1px dashed rgba(255, 255, 255, 0.1)',
+        color: '#888',
+        padding: '20px'
+      }}>
+        <div style={{ fontSize: '40px', marginBottom: '15px', opacity: 0.5 }}>📊</div>
+        <h3 style={{ margin: '0 0 8px 0', color: '#ff9800', fontSize: '18px' }}>
+          Sentiment Analysis Pending
+        </h3>
+        <p style={{ margin: 0, fontSize: '13px', textAlign: 'center', maxWidth: '300px', lineHeight: '1.6' }}>
+          AI is currently analyzing financial news sentiment for <strong>{company}</strong>.<br/> 
+          Results typically populate within <strong>24 hours</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  // --- LOADING STATE ---
+  if (loading) {
+    return (
+      <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff9800' }}>
+        <div>Analyzing sentiment patterns...</div>
+      </div>
+    );
+  }
 
   return (
     <div onDoubleClick={resetZoom} style={{ userSelect: "none" }}>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart
           data={data} 
-          syncId="stockSync" // Allows syncing with GainLoss chart
+          syncId="stockSync" 
           onMouseDown={(e) => e?.activeLabel && setRefStart(Number(e.activeLabel))}
           onMouseMove={(e) => {
             if (refStart !== null && e?.activeLabel) {
@@ -125,7 +171,7 @@ const FinbertSentimentChart = ({ company }: Props) => {
           }}
           onMouseUp={handleZoom}
         >
-          <CartesianGrid stroke="#ccc" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
 
           <XAxis
             dataKey="timestamp"
@@ -133,32 +179,29 @@ const FinbertSentimentChart = ({ company }: Props) => {
             scale="time"
             domain={["dataMin", "dataMax"]}
             ticks={generateXTicks(data, startIndex, endIndex)}
+            tick={{ fill: '#888', fontSize: 12 }}
             tickFormatter={(time) =>
               new Date(time).toLocaleDateString("en-GB", {
                 month: "short",
                 year: "2-digit",
               })
             }
-            label={{
-              value: "Date (Month / Year)",
-              position: "insideBottom",
-              offset: -20,
-              style: { fontWeight: "bold", fontSize: 14, fill: "#555" },
-            }}
           />
 
           <YAxis
             type="number"
-            domain={[-1, 1]} // Sentiment range is usually -1 to 1
+            domain={[-1, 1]} 
+            tick={{ fill: '#888', fontSize: 12 }}
             label={{
               value: "FinBERT Score",
               angle: -90,
               position: "insideLeft",
-              style: { fontWeight: "bold", fontSize: 14, fill: "#555" },
+              style: { fontWeight: "bold", fontSize: 12, fill: "#888" },
             }}
           />
 
           <Tooltip
+            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
             labelFormatter={(label) =>
               typeof label === "number"
                 ? new Date(label).toLocaleDateString("en-GB", {
@@ -177,9 +220,9 @@ const FinbertSentimentChart = ({ company }: Props) => {
             dataKey="finbert_sentiment_score"
             name="FinBERT Sentiment"
             stroke="#ff9800"
-            strokeWidth={3}
+            strokeWidth={2.5}
             dot={false}
-            isAnimationActive={false} // Improves performance during zoom/sync
+            isAnimationActive={false} 
           />
 
           {refStart !== null && refEnd !== null && (
@@ -193,11 +236,11 @@ const FinbertSentimentChart = ({ company }: Props) => {
 
           <Brush
             dataKey="timestamp"
-            height={35}
+            height={30}
             startIndex={startIndex}
             endIndex={endIndex}
-            stroke="#ff9800"
-            travellerWidth={10}
+            stroke="#444"
+            fill="rgba(0,0,0,0.2)"
             tickFormatter={(time) =>
               new Date(time).toLocaleDateString("en-GB", {
                 month: "short",

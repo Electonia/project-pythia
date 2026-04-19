@@ -84,29 +84,38 @@ const Dashboard = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, selectedResult]);
 
-  const handleAddStock = async () => {
-    if (!selectedResult) return;
-    try {
-      const response = await fetch("http://46.101.3.179:5000/api/add-stock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: selectedResult.name, ticker: selectedResult.ticker }),
-      });
+ const handleAddStock = async () => {
+  if (!selectedResult) return;
+  try {
+    const response = await fetch("http://46.101.3.179:5000/api/add-stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: selectedResult.name, ticker: selectedResult.ticker }),
+    });
 
-      if (response.ok) {
-        setShowModal(false);
-        setSearchTerm("");
-        setSelectedResult(null);
-        await fetchStocks(); 
-        setSelectedCompany(selectedResult.ticker);
-      } else {
-        const err = await response.json();
-        alert(err.message);
-      }
-    } catch (err) {
-      console.error("Add stock error:", err);
+    // --- NEW: Parse the response JSON ---
+    const data = await response.json();
+
+    if (response.ok) {
+      // --- NEW: Show the success message from the backend ---
+      alert(data.message); 
+
+      setShowModal(false);
+      setSearchTerm("");
+      setSelectedResult(null);
+      
+      // Refresh list and select the new stock
+      await fetchStocks(); 
+      setSelectedCompany(selectedResult.ticker);
+    } else {
+      // Show the specific error (e.g., "Stock already in dashboard")
+      alert(data.message || "Failed to add stock");
     }
-  };
+  } catch (err) {
+    console.error("Add stock error:", err);
+    alert("Check your connection. The server might be down.");
+  }
+};
 
   const handleLogout = () => {
     localStorage.removeItem("user");

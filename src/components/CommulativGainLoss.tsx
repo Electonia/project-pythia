@@ -31,6 +31,7 @@ interface Props {
 
 const CommulativeChart = ({ company }: Props) => {
   const [data, setData] = useState<StockData[]>([]);
+  const [loading, setLoading] = useState(true); // Initialize as true
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(0);
 
@@ -38,29 +39,43 @@ const CommulativeChart = ({ company }: Props) => {
   const [refEndTime, setRefEndTime] = useState<number | null>(null);
 
   useEffect(() => {
-    // Fetch JSON directly from your API
-    fetch(`http://46.101.3.179:5000/api/CommulativeGainLoss/${company}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        return res.json();
-      })
-      .then((jsonData: DBCommulativeRow[]) => {
-        const filtered: StockData[] = jsonData
-          .filter((row) => row["Date Time"] && row.CumulativeGainLoss != null)
-          .map((row) => ({
-            "Date Time": row["Date Time"],
-            timestamp: new Date(row["Date Time"]).getTime(),
-            CumulativeGainLoss: Number(row.CumulativeGainLoss),
-          }))
-          .sort((a, b) => a.timestamp - b.timestamp);
+    let isMounted = true;
+    setLoading(true);
 
-        if (filtered.length > 0) {
+    const fetchCumulativeData = async () => {
+      try {
+        const res = await fetch(`http://46.101.3.179:5000/api/CommulativeGainLoss/${company}`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        
+        const jsonData: DBCommulativeRow[] = await res.json();
+
+        if (isMounted) {
+          const filtered: StockData[] = jsonData
+            .filter((row) => row["Date Time"] && row.CumulativeGainLoss != null)
+            .map((row) => ({
+              "Date Time": row["Date Time"],
+              timestamp: new Date(row["Date Time"]).getTime(),
+              CumulativeGainLoss: Number(row.CumulativeGainLoss),
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
           setData(filtered);
           setStartIndex(0);
-          setEndIndex(filtered.length - 1);
+          setEndIndex(filtered.length > 0 ? filtered.length - 1 : 0);
         }
-      })
-      .catch((err) => console.error("Commulative Fetch Error:", err));
+      } catch (err) {
+        console.error("Commulative Fetch Error:", err);
+        if (isMounted) setData([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchCumulativeData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [company]);
 
   const handleZoom = () => {
@@ -85,6 +100,8 @@ const CommulativeChart = ({ company }: Props) => {
   const generateXTicks = (data: StockData[], start: number, end: number) => {
     if (!data.length) return [];
     const visible = data.slice(start, end + 1);
+    if (visible.length === 0) return [];
+
     const step = Math.ceil(visible.length / 12);
     const middleTicks = visible.filter((_, i) => i % step === 0).map(d => d.timestamp);
     
@@ -95,32 +112,77 @@ const CommulativeChart = ({ company }: Props) => {
     ];
   };
 
-  if (!data.length) return <div style={{ padding: "20px", color: "#666" }}>Loading Cumulative Data...</div>;
+  // --- STYLED PLACEHOLDER FOR NO DATA ---
+  if (!loading && data.length === 0) {
+    return (
+      <div style={{ 
+        height: 450, 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderRadius: '16px',
+        border: '1px dashed rgba(255, 255, 255, 0.1)',
+        color: '#888',
+        padding: '20px'
+      }}>
+        <div style={{ fontSize: '40px', marginBottom: '15px', opacity: 0.5 }}>📈</div>
+        <h3 style={{ margin: '0 0 8px 0', color: '#1976d2', fontSize: '18px' }}>
+          Cumulative Analysis Pending
+        </h3>
+        <p style={{ margin: 0, fontSize: '13px', textAlign: 'center', maxWidth: '300px', lineHeight: '1.6' }}>
+          Compiling directional performance history for <strong>{company}</strong>.<br/> 
+          Full visualization typically populates within <strong>24 hours</strong>.
+        </p>
+      </div>
+    );
+  }
 
+  // --- LOADING STATE ---
+  if (loading) {
+    return (
+      <div style={{ height: 450, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1976d2' }}>
+        <div>Compiling cumulative performance data...</div>
+      </div>
+    );
+  }
+  
   return (
     <div onDoubleClick={resetZoom} style={{ userSelect: "none" }}>
       <ResponsiveContainer width="100%" height={450}>
         <AreaChart
           data={data}
-          syncId="stockSync" // Must match your other charts to sync scrolling/tooltips
+          syncId="stockSync"
           onMouseDown={(e) => { if (e?.activeLabel) setRefStartTime(Number(e.activeLabel)); }}
           onMouseMove={(e) => { if (refStartTime !== null && e?.activeLabel) setRefEndTime(Number(e.activeLabel)); }}
           onMouseUp={handleZoom}
         >
-          <CartesianGrid stroke="#ccc" strokeDasharray="5 5" />
+          <defs>
+            <linearGradient id="colorGainLoss" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1976d2" stopOpacity={0.7} />
+              <stop offset="40%" stopColor="#1976d2" stopOpacity={0.35} />
+              <stop offset="75%" stopColor="#1976d2" stopOpacity={0.15} />
+              <stop offset="100%" stopColor="#1976d2" stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
           <XAxis
             dataKey="timestamp"
             type="number"
             scale="time"
             domain={["dataMin", "dataMax"]}
             ticks={generateXTicks(data, startIndex, endIndex)}
+            tick={{ fill: '#888', fontSize: 12 }}
             tickFormatter={(time) => new Date(time).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
-            label={{ value: "Date (Month / Year)", position: "insideBottom", offset: -20, style: { fontWeight: "bold", fontSize: 14, fill: "#555" } }}
+            label={{ value: "Date (Month / Year)", position: "insideBottom", offset: -20, style: { fontWeight: "bold", fontSize: 12, fill: "#888" } }}
           />
           <YAxis
-            label={{ value: "Cumulative Performance", angle: -90, position: "insideLeft", style: { fontWeight: "bold", fontSize: 14, fill: "#555" } }}
+            tick={{ fill: '#888', fontSize: 12 }}
+            label={{ value: "Cumulative Performance", angle: -90, position: "insideLeft", style: { fontWeight: "bold", fontSize: 12, fill: "#888" } }}
           />
           <Tooltip
+            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }}
             labelFormatter={(label) => typeof label === "number" 
               ? new Date(label).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) 
               : label}
@@ -132,7 +194,7 @@ const CommulativeChart = ({ company }: Props) => {
             name="Cumulative Directional Performance"
             stroke="#1976d2"
             fill="url(#colorGainLoss)"
-            strokeWidth={3}
+            strokeWidth={2.5}
             dot={false}
             isAnimationActive={false}
           />
@@ -141,11 +203,11 @@ const CommulativeChart = ({ company }: Props) => {
           )}
           <Brush
             dataKey="timestamp"
-            height={35}
+            height={30}
             startIndex={startIndex}
             endIndex={endIndex}
-            stroke="#1976d2"
-            travellerWidth={10}
+            stroke="#444"
+            fill="rgba(0,0,0,0.2)"
             tickFormatter={(time) => new Date(time).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
             onChange={(e) => {
               if (e?.startIndex !== undefined && e?.endIndex !== undefined) {
@@ -154,21 +216,6 @@ const CommulativeChart = ({ company }: Props) => {
               }
             }}
           />
-          <defs>
-  <linearGradient id="colorGainLoss" x1="0" y1="0" x2="0" y2="1">
-    {/* Strong top color */}
-    <stop offset="0%" stopColor="#1976d2" stopOpacity={0.7} />
-
-    {/* Mid smooth fade */}
-    <stop offset="40%" stopColor="#1976d2" stopOpacity={0.35} />
-
-    {/* Lower fade */}
-    <stop offset="75%" stopColor="#1976d2" stopOpacity={0.15} />
-
-    {/* Bottom very soft */}
-    <stop offset="100%" stopColor="#1976d2" stopOpacity={0.03} />
-  </linearGradient>
-</defs>
         </AreaChart>
       </ResponsiveContainer>
     </div>
