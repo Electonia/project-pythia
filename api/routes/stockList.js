@@ -26,9 +26,9 @@ router.get("/api/search-stocks", async (req, res) => {
             // Ensure this is exactly like this:
             .input('search', sql.NVarChar, query + '%') 
             .query(`
-                SELECT TOP 10 name, ticker 
+                SELECT TOP 10 stock_name, stock_ticker 
                 FROM stocks 
-                WHERE name LIKE @search OR ticker LIKE @search
+                WHERE stock_name LIKE @search OR stock_ticker LIKE @search
             `);
             
         res.json(result.recordset);
@@ -48,7 +48,7 @@ router.post("/api/add-stock", async (req, res) => {
         // Verify it exists in the MASTER table
         const verify = await db.request()
             .input('ticker', sql.NVarChar, ticker)
-            .query("SELECT * FROM stocks WHERE ticker = @ticker");
+            .query("SELECT * FROM stocks WHERE stock_ticker = @ticker");
 
         if (verify.recordset.length === 0) {
             return res.status(400).json({ message: "Stock not found in master records." });
