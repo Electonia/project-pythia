@@ -47,10 +47,16 @@ router.get("/api/search-stocks", async (req, res) => {
 // --- 3. VERIFY AND ADD TO stock_id ---
 router.post("/api/add-stock", async (req, res) => {
     const { name, ticker } = req.body;
+    
+    // Safety check: ensure we actually have data
+    if (!name || !ticker) {
+        return res.status(400).json({ message: "Name and Ticker are required." });
+    }
+
     try {
         const db = await pool;
 
-        // Verify it exists in the MASTER table using correct column names
+        // 1. Verify it exists in the MASTER table using correct column names
         const verify = await db.request()
             .input('ticker', sql.NVarChar, ticker)
             .query("SELECT * FROM stocks WHERE stock_ticker = @ticker");
@@ -59,7 +65,7 @@ router.post("/api/add-stock", async (req, res) => {
             return res.status(400).json({ message: "Stock not found in master records." });
         }
 
-        // Check if it's already in the dashboard list
+        // 2. Check if it's already in the dashboard list (stock_id table)
         const exists = await db.request()
             .input('ticker', sql.NVarChar, ticker)
             .query("SELECT * FROM stock_id WHERE stock_ticker = @ticker");
@@ -68,16 +74,23 @@ router.post("/api/add-stock", async (req, res) => {
             return res.status(400).json({ message: "Stock is already in your dashboard." });
         }
 
-        // Insert into dashboard list
+        // 3. Insert into dashboard list using CORRECT column names: stock_name and stock_ticker
         await db.request()
             .input('name', sql.NVarChar, name)
             .input('ticker', sql.NVarChar, ticker)
             .query("INSERT INTO stock_id (stock_name, stock_ticker) VALUES (@name, @ticker)");
 
-        res.status(201).json({ message: "Added successfully" });
+        res.status(201).json({ 
+            message: "Company Stock Added successfully! Data will be uploaded within 24-Hours." 
+        });
+
     } catch (err) {
-        console.error("Add error:", err);
-        res.status(500).json({ message: "Internal server error" });
+        // This will show you the exact SQL error in your PM2 logs/terminal
+        console.error("CRITICAL ADD ERROR:", err.message);
+        res.status(500).json({ 
+            message: "Internal server error", 
+            details: err.message 
+        });
     }
 });
 
