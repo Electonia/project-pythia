@@ -27,7 +27,7 @@ router.get("/api/search-stocks", async (req, res) => {
             .query(`
                 SELECT TOP 10 name, ticker 
                 FROM stocks 
-                WHERE name LIKE @search OR ticker LIKE @search
+                WHERE name LIKE @search
             `);
         res.json(result.recordset);
     } catch (err) {
