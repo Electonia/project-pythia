@@ -23,7 +23,6 @@ router.get("/api/search-stocks", async (req, res) => {
     try {
         const db = await pool;
         const result = await db.request()
-            // Ensure this is exactly like this:
             .input('search', sql.NVarChar, query + '%') 
             .query(`
                 SELECT TOP 10 stock_name, stock_ticker 
@@ -31,9 +30,15 @@ router.get("/api/search-stocks", async (req, res) => {
                 WHERE stock_name LIKE @search OR stock_ticker LIKE @search
             `);
             
-        res.json(result.recordset);
+        // We need to map the results so the frontend receives 'name' and 'ticker' 
+        // as it expects in the SearchResult interface
+        const formattedResults = result.recordset.map(row => ({
+            name: row.stock_name,
+            ticker: row.stock_ticker
+        }));
+
+        res.json(formattedResults);
     } catch (err) {
-        // This will print the EXACT error to your server terminal/logs
         console.error("DETAILED SEARCH ERROR:", err.message);
         res.status(500).json({ error: "Search failed", details: err.message });
     }
@@ -45,7 +50,7 @@ router.post("/api/add-stock", async (req, res) => {
     try {
         const db = await pool;
 
-        // Verify it exists in the MASTER table
+        // Verify it exists in the MASTER table using correct column names
         const verify = await db.request()
             .input('ticker', sql.NVarChar, ticker)
             .query("SELECT * FROM stocks WHERE stock_ticker = @ticker");
