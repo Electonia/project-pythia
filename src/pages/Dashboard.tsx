@@ -5,10 +5,14 @@ import FinbertSentimentChart from "../components/FinbertChart";
 import GainLossChart from "../components/GainLossChart";
 import CommulativeChart from "../components/CommulativGainLoss";
 
-// 1. Define the interface for your database row
 interface StockItem {
   stock_name: string;
   stock_ticker: string;
+}
+
+interface SearchResult {
+  name: string;
+  ticker: string;
 }
 
 const getInitialUser = () => {
@@ -16,8 +20,7 @@ const getInitialUser = () => {
   if (savedUser) {
     try {
       return JSON.parse(savedUser);
-    } catch (e) {
-      console.error("Failed to parse user session", e);
+    } catch {
       return null;
     }
   }
@@ -26,13 +29,16 @@ const getInitialUser = () => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  
   const [user, setUser] = useState(getInitialUser());
-  
-  // 2. New states for dynamic data
   const [stocks, setStocks] = useState<StockItem[]>([]); 
   const [selectedCompany, setSelectedCompany] = useState(""); 
   const [loading, setLoading] = useState(true);
+
+  // Search Modal States
+  const [showModal, setShowModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -40,27 +46,67 @@ const Dashboard = () => {
     }
   }, [user, navigate]);
 
-  // 3. Fetch the stock list from your new backend route
-  useEffect(() => {
-    const fetchStocks = async () => {
-      try {
-        const response = await fetch("http://46.101.3.179:5000/api/stock-list");
-        const data = await response.json();
-        setStocks(data);
-        
-        // Auto-select the first stock from the DB if one exists
-        if (data.length > 0) {
-          setSelectedCompany(data[0].stock_ticker);
-        }
-      } catch (error) {
-        console.error("Error fetching stock list:", error);
-      } finally {
-        setLoading(false);
+  const fetchStocks = async () => {
+    try {
+      const response = await fetch("http://46.101.3.179:5000/api/stock-list");
+      const data = await response.json();
+      setStocks(data);
+      if (data.length > 0 && !selectedCompany) {
+        setSelectedCompany(data[0].stock_ticker);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching stock list:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (user) fetchStocks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Handle Search Autocomplete
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchTerm.length > 0 && !selectedResult) {
+        try {
+          const res = await fetch(`http://46.101.3.179:5000/api/search-stocks?q=${searchTerm}`);
+          const data = await res.json();
+          setSearchResults(data);
+        } catch (err) {
+          console.error("Search fetch error:", err);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, selectedResult]);
+
+  const handleAddStock = async () => {
+    if (!selectedResult) return;
+    try {
+      const response = await fetch("http://46.101.3.179:5000/api/add-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: selectedResult.name, ticker: selectedResult.ticker }),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        setSearchTerm("");
+        setSelectedResult(null);
+        await fetchStocks(); 
+        setSelectedCompany(selectedResult.ticker);
+      } else {
+        const err = await response.json();
+        alert(err.message);
+      }
+    } catch (err) {
+      console.error("Add stock error:", err);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -68,6 +114,7 @@ const Dashboard = () => {
     navigate("/login");
   };
 
+  // YOUR ORIGINAL CARD STYLE
   const cardStyle = {
     background: "linear-gradient(145deg, #1e1e1e, #161616)",
     padding: "24px",
@@ -156,7 +203,10 @@ const Dashboard = () => {
         <select
           id="companySelect"
           value={selectedCompany}
-          onChange={(e) => setSelectedCompany(e.target.value)}
+          onChange={(e) => {
+            if (e.target.value === "ADD") setShowModal(true);
+            else setSelectedCompany(e.target.value);
+          }}
           disabled={loading}
           style={{
             padding: "10px 14px",
@@ -172,16 +222,49 @@ const Dashboard = () => {
           {loading ? (
             <option>Loading stocks...</option>
           ) : (
-            stocks.map((stock) => (
-              <option key={stock.stock_ticker} value={stock.stock_ticker}>
-                {stock.stock_name}
+            <>
+              {stocks.map((stock) => (
+                <option key={stock.stock_ticker} value={stock.stock_ticker}>
+                  {stock.stock_name} ({stock.stock_ticker})
+                </option>
+              ))}
+              <option value="ADD" style={{ color: "#00ff96", fontWeight: "bold" }}>
+                + Add New Company Stock
               </option>
-            ))
+            </>
           )}
         </select>
       </div>
 
-      {/* CHARTS GRID */}
+      {/* SEARCH MODAL */}
+      {showModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <h3 style={{ marginTop: 0, color: "#00ff96" }}>Add Company Stock</h3>
+            <input 
+              style={modalInputStyle}
+              placeholder="Type first letter (e.g. A)..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setSelectedResult(null); }}
+            />
+            {searchResults.length > 0 && !selectedResult && (
+              <div style={resultsContainerStyle}>
+                {searchResults.map(res => (
+                  <div key={res.ticker} style={resultItemStyle} onClick={() => { setSelectedResult(res); setSearchTerm(`${res.name} (${res.ticker})`); }}>
+                    {res.name} (<strong>{res.ticker}</strong>)
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button disabled={!selectedResult} onClick={handleAddStock} style={saveBtnStyle}>Add</button>
+              <button onClick={() => { setShowModal(false); setSearchTerm(""); }} style={cancelBtnStyle}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHARTS GRID - ORIGINAL SINGLE COLUMN LAYOUT */}
       <div
         style={{
           display: "grid",
@@ -189,24 +272,12 @@ const Dashboard = () => {
           gap: "25px"
         }}
       >
-        {/* 4. Conditional rendering: Don't show charts until a company is selected */}
         {selectedCompany ? (
           <>
-            <div style={cardStyle}>
-              <StockChart company={selectedCompany} />
-            </div>
-
-            <div style={cardStyle}>
-              <FinbertSentimentChart company={selectedCompany} />
-            </div>
-
-            <div style={cardStyle}>
-              <GainLossChart company={selectedCompany} />
-            </div>
-
-            <div style={cardStyle}>
-              <CommulativeChart company={selectedCompany} />
-            </div>
+            <div style={cardStyle}><StockChart company={selectedCompany} /></div>
+            <div style={cardStyle}><FinbertSentimentChart company={selectedCompany} /></div>
+            <div style={cardStyle}><GainLossChart company={selectedCompany} /></div>
+            <div style={cardStyle}><CommulativeChart company={selectedCompany} /></div>
           </>
         ) : (
           !loading && <div style={{ textAlign: "center", color: "#666" }}>Please select a company to view analytics.</div>
@@ -215,5 +286,14 @@ const Dashboard = () => {
     </div>
   );
 };
+
+// Modal Styles (Kept Minimal to match your background)
+const modalOverlayStyle: React.CSSProperties = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 };
+const modalContentStyle: React.CSSProperties = { background: "#161616", padding: "30px", borderRadius: "15px", width: "350px", border: "1px solid #333" };
+const modalInputStyle: React.CSSProperties = { width: "100%", padding: "12px", background: "#000", border: "1px solid #444", color: "#fff", borderRadius: "8px", boxSizing: "border-box" };
+const resultsContainerStyle: React.CSSProperties = { background: "#000", border: "1px solid #333", marginTop: "5px", borderRadius: "8px", maxHeight: "150px", overflowY: "auto" };
+const resultItemStyle: React.CSSProperties = { padding: "10px", cursor: "pointer", borderBottom: "1px solid #222", fontSize: "14px" };
+const saveBtnStyle: React.CSSProperties = { flex: 1, padding: "12px", background: "#00ff96", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", color: "#000" };
+const cancelBtnStyle: React.CSSProperties = { flex: 1, padding: "12px", background: "#333", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" };
 
 export default Dashboard;
