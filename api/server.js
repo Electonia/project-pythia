@@ -5,6 +5,7 @@ import GainLossRouter from "./routes/GainLoss.js";
 import FinbertRouter from "./routes/Finbert.js";
 import ComulativeGainRouter from "./routes/CommulativeGainLoss.js";
 import authRouter from "./routes/auth.js";
+import stockListRouter from "./routes/stockList.js";
 
 const app = express();
 app.use(cors());
@@ -17,5 +18,6 @@ app.use(GainLossRouter);
 app.use(FinbertRouter);
 app.use(ComulativeGainRouter); 
 app.use(authRouter);
+app.use(stockListRouter);
 
 app.listen(5000, () => console.log("Server running on port 5000"));

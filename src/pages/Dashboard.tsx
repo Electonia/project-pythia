@@ -5,10 +5,12 @@ import FinbertSentimentChart from "../components/FinbertChart";
 import GainLossChart from "../components/GainLossChart";
 import CommulativeChart from "../components/CommulativGainLoss";
 
-/**
- * Helper function to retrieve user data safely from localStorage 
- * without causing cascading renders.
- */
+// 1. Define the interface for your database row
+interface StockItem {
+  stock_name: string;
+  stock_ticker: string;
+}
+
 const getInitialUser = () => {
   const savedUser = localStorage.getItem("user");
   if (savedUser) {
@@ -25,18 +27,41 @@ const getInitialUser = () => {
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  // Initialize state directly from localStorage
   const [user, setUser] = useState(getInitialUser());
-  const [selectedCompany, setSelectedCompany] = useState("AAPL");
+  
+  // 2. New states for dynamic data
+  const [stocks, setStocks] = useState<StockItem[]>([]); 
+  const [selectedCompany, setSelectedCompany] = useState(""); 
+  const [loading, setLoading] = useState(true);
 
-  // Redirect to login if no session exists
   useEffect(() => {
     if (!user) {
       navigate("/login");
     }
   }, [user, navigate]);
 
-  // Logout handler
+  // 3. Fetch the stock list from your new backend route
+  useEffect(() => {
+    const fetchStocks = async () => {
+      try {
+        const response = await fetch("http://46.101.3.179:5000/api/stock-list");
+        const data = await response.json();
+        setStocks(data);
+        
+        // Auto-select the first stock from the DB if one exists
+        if (data.length > 0) {
+          setSelectedCompany(data[0].stock_ticker);
+        }
+      } catch (error) {
+        console.error("Error fetching stock list:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) fetchStocks();
+  }, [user]);
+
   const handleLogout = () => {
     localStorage.removeItem("user");
     setUser(null);
@@ -47,14 +72,12 @@ const Dashboard = () => {
     background: "linear-gradient(145deg, #1e1e1e, #161616)",
     padding: "24px",
     borderRadius: "16px",
-    boxShadow:
-      "0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)",
     border: "1px solid rgba(255,255,255,0.05)",
     color: "#eaeaea",
     transition: "all 0.3s ease"
   };
 
-  // Prevent rendering if user is being redirected
   if (!user) return null;
 
   return (
@@ -134,6 +157,7 @@ const Dashboard = () => {
           id="companySelect"
           value={selectedCompany}
           onChange={(e) => setSelectedCompany(e.target.value)}
+          disabled={loading}
           style={{
             padding: "10px 14px",
             fontSize: "14px",
@@ -141,13 +165,19 @@ const Dashboard = () => {
             border: "1px solid #333",
             background: "#111",
             color: "#fff",
-            cursor: "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             outline: "none"
           }}
         >
-          <option value="AAPL">Apple</option>
-          <option value="ORCL">Oracle</option>
-          <option value="SAP">SAP</option>
+          {loading ? (
+            <option>Loading stocks...</option>
+          ) : (
+            stocks.map((stock) => (
+              <option key={stock.stock_ticker} value={stock.stock_ticker}>
+                {stock.stock_name}
+              </option>
+            ))
+          )}
         </select>
       </div>
 
@@ -159,21 +189,28 @@ const Dashboard = () => {
           gap: "25px"
         }}
       >
-        <div style={cardStyle}>
-          <StockChart company={selectedCompany} />
-        </div>
+        {/* 4. Conditional rendering: Don't show charts until a company is selected */}
+        {selectedCompany ? (
+          <>
+            <div style={cardStyle}>
+              <StockChart company={selectedCompany} />
+            </div>
 
-        <div style={cardStyle}>
-          <FinbertSentimentChart company={selectedCompany} />
-        </div>
+            <div style={cardStyle}>
+              <FinbertSentimentChart company={selectedCompany} />
+            </div>
 
-        <div style={cardStyle}>
-          <GainLossChart company={selectedCompany} />
-        </div>
+            <div style={cardStyle}>
+              <GainLossChart company={selectedCompany} />
+            </div>
 
-        <div style={cardStyle}>
-          <CommulativeChart company={selectedCompany} />
-        </div>
+            <div style={cardStyle}>
+              <CommulativeChart company={selectedCompany} />
+            </div>
+          </>
+        ) : (
+          !loading && <div style={{ textAlign: "center", color: "#666" }}>Please select a company to view analytics.</div>
+        )}
       </div>
     </div>
   );
